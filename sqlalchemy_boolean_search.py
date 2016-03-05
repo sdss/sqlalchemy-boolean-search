@@ -38,6 +38,11 @@ http://sqlalchemy-boolean-search.readthedocs.org/
 Authors
 -------
 * Ling Thio - ling.thio [at] gmail.com
+
+Revision History
+--------
+2016-03-5: Modified to allow for a list of ModelClasses as input - Brian Cherinka
+
 """
 
 from __future__ import print_function
@@ -84,7 +89,7 @@ class Condition(object):
 
         condition = None
         if inspect.ismodule(DataModelClass):
-            models = [i[1] for i in inspect.getmembers(datadb, inspect.isclass) if hasattr(i[1], '__tablename__')]
+            models = [i[1] for i in inspect.getmembers(DataModelClass, inspect.isclass) if hasattr(i[1], '__tablename__')]
         else:
             if isinstance(DataModelClass, list):
                 models = DataModelClass
@@ -96,10 +101,16 @@ class Condition(object):
             field = None
             index = None
             for i, model in enumerate(models):
-                print('trying model {0} for name {1}'.format(model, self.name))
 
                 field = get_field(model, self.name)
-                if field:
+                try:
+                    ptype = field.type
+                    ilike = field.ilike
+                except AttributeError as e:
+                    ptype = None
+                    ilike = None
+
+                if field and ptype and ilike:
                     index = i
                     break
 
@@ -130,6 +141,7 @@ class Condition(object):
             lower_field = func.lower(field)
             value = self.value
             lower_value = func.lower(value)
+
             if field.type.python_type == float:
                 try:
                     value = float(value)
