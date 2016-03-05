@@ -42,13 +42,16 @@ Authors
 
 from __future__ import print_function
 import pyparsing as pp
+import inspect
 from pyparsing import ParseException  # explicit export
 from sqlalchemy import func
 from sqlalchemy.sql import or_, and_, not_, sqltypes
 
+
 # Define a custom exception class
 class BooleanSearchException(Exception):
     pass
+
 
 # ***** Utility functions *****
 def get_field(DataModelClass, field_name):
@@ -64,6 +67,7 @@ def get_field(DataModelClass, field_name):
     # Handle flat field names such as 'name'
     return getattr(DataModelClass, field_name, None)
 
+
 # ***** Define the expression element classes *****
 
 class Condition(object):
@@ -76,10 +80,51 @@ class Condition(object):
         self.value = data[0][2]
 
     def filter(self, DataModelClass):
+        ''' Return the condition as an SQLalchemy query condition '''
+
+        condition = None
+        if inspect.ismodule(DataModelClass):
+            models = [i[1] for i in inspect.getmembers(datadb, inspect.isclass) if hasattr(i[1], '__tablename__')]
+        else:
+            if isinstance(DataModelClass, list):
+                models = DataModelClass
+            else:
+                models = None
+
+        if models:
+            # Input is a a list of DataModelClasses
+            field = None
+            index = None
+            for i, model in enumerate(models):
+                print('trying model {0} for name {1}'.format(model, self.name))
+
+                field = get_field(model, self.name)
+                if field:
+                    index = i
+                    break
+
+            if not field:
+                raise BooleanSearchException(
+                    "Table '%(table_name)s' does not have a field named '%(field_name)s'."
+                    % dict(table_name=model.__tablename__, field_name=self.name))
+
+            condition = self.filter_one(models[index], field=field, condition=condition)
+
+        else:
+            # Input is only one DataModelClass
+            field = get_field(DataModelClass, self.name)
+            if field:
+                condition = self.filter_one(DataModelClass)
+            else:
+                raise BooleanSearchException(
+                    "Table '%(table_name)s' does not have a field named '%(field_name)s'."
+                    % dict(table_name=DataModelClass.__tablename__, field_name=self.name))
+
+        return condition
+
+    def filter_one(self, DataModelClass, field=None, condition=None):
         """ Return the condition as a SQLAlchemy query condition
         """
-        condition = None
-        field = get_field(DataModelClass, self.name)
         if field:
             # Prepare field and value
             lower_field = func.lower(field)
@@ -118,6 +163,9 @@ class Condition(object):
             elif self.op == '!=':
                 condition = lower_field.__ne__(lower_value)
             elif self.op == '=':
+                # this operator maps to LIKE
+                # x=5 -> x LIKE '%5%' (x contains 5)
+                # x=5* -> x LIKE '5%' (x starts with 5)
                 field = getattr(DataModelClass, self.name)
                 value = self.value
                 if value.find('*') >= 0:
@@ -125,10 +173,6 @@ class Condition(object):
                     condition = field.ilike(value)
                 else:
                     condition = field.ilike('%' + value + '%')
-        else:
-            raise BooleanSearchException(
-                "Table '%(table_name)s' does not have a field named '%(field_name)s'."
-                % dict(table_name=DataModelClass.__tablename__, field_name=self.name))
 
         return condition
 

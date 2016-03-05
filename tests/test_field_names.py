@@ -19,19 +19,19 @@ def test_field_names(db):
     expression = parse_boolean_search('string==Record')
     record = Record.query.filter(expression.filter(Record)).first()
     assert record is not None
-    assert record.string=='Record'
+    assert record.string == 'Record'
 
     # Test level-1 hierarchy name
     expression = parse_boolean_search('parent.name==Parent')
     record = Record.query.filter(expression.filter(Record)).first()
     assert record is not None
-    assert record.string=='Record'
+    assert record.string == 'Record'
 
     # Test level-2 hierarchy name
     expression = parse_boolean_search('parent.grandparent.name==GrandParent')
     record = Record.query.filter(expression.filter(Record)).first()
     assert record is not None
-    assert record.string=='Record'
+    assert record.string == 'Record'
 
     # Delete records
     db.session.delete(record)

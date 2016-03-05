@@ -18,6 +18,7 @@ the_app.config.update(
 
 from . import models
 
+
 @pytest.fixture(scope='session')
 def app(request):
     # Establish an application context before running the tests.
