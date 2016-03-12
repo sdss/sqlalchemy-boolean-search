@@ -42,6 +42,7 @@ Authors
 Revision History
 --------
 2016-03-5: Modified to allow for a list of ModelClasses as input - Brian Cherinka
+2016-03-11: Modified to output a dictionary of parameters: values - B. Cherinka
 
 """
 
@@ -83,6 +84,9 @@ class Condition(object):
         self.name = data[0][0]
         self.op = data[0][1]
         self.value = data[0][2]
+        if self.name not in params:
+            #params.append(self.name)
+            params.update({self.name: self.value})
 
     def filter(self, DataModelClass):
         ''' Return the condition as an SQLalchemy query condition '''
@@ -197,6 +201,9 @@ class BoolNot(object):
     """
     def __init__(self, data):
         self.condition = data[0][1]
+        if isinstance(self.condition, Condition) and self.condition.name not in params:
+            #params.append(self.condition.name)
+            params.update({self.condition.name: self.condition.value})
 
     def filter(self, DataModelClass):
         """ Return the operator as a SQLAlchemy not_() condition
@@ -211,7 +218,14 @@ class BoolAnd(object):
     """ Represents the boolean operator AND
     """
     def __init__(self, data):
-        self.conditions = [condition for condition in data[0] if condition and condition != 'and']
+        #self.conditions = [condition for condition in data[0] if condition and condition != 'and']
+        self.conditions = []
+        for condition in data[0]:
+            if condition and condition != 'and':
+                self.conditions.append(condition)
+                if isinstance(condition, Condition) and condition.name not in params:
+                    #params.append(condition.name)
+                    params.update({condition.name: condition.value})
 
     def filter(self, DataModelClass):
         """ Return the operator as a SQLAlchemy and_() condition
@@ -227,7 +241,14 @@ class BoolOr(object):
     """ Represents the boolean operator OR
     """
     def __init__(self, data):
-        self.conditions = [condition for condition in data[0] if condition and condition != 'or']
+        #self.conditions = [condition for condition in data[0] if condition and condition != 'or']
+        self.conditions = []
+        for condition in data[0]:
+            if condition and condition != 'or':
+                self.conditions.append(condition)
+                if isinstance(condition, Condition) and condition.name not in params:
+                    #params.append(condition.name)
+                    params.update({condition.name: condition.value})
 
     def filter(self, DataModelClass):
         """ Return the operator as a SQLAlchemy or_() condition
@@ -256,16 +277,18 @@ expression_parser = pp.operatorPrecedence(condition, [
     (pp.CaselessLiteral("or"), 2, pp.opAssoc.LEFT, BoolOr),
 ])
 
+params = {}
 
 def parse_boolean_search(boolean_search):
     """ Parses the boolean search expression into a hierarchy of boolean operators.
         Returns a BoolNot or BoolAnd or BoolOr object.
     """
+    global params
+    params = {}
     try:
         expression = expression_parser.parseString(boolean_search)[0]
+        expression.params = params
         return expression
     except ParseException as e:
-        raise BooleanSearchException(
-            "Syntax error at offset %(offset)s."
-            % dict(offset=e.col))
+        raise BooleanSearchException("Syntax error at offset %(offset)s." % dict(offset=e.col))
 
