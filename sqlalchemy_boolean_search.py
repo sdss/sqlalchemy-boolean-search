@@ -43,6 +43,7 @@ Revision History
 --------
 2016-03-5: Modified to allow for a list of ModelClasses as input - Brian Cherinka
 2016-03-11: Modified to output a dictionary of parameters: values - B. Cherinka
+2016-03-16: Changed sqlalchemy values in conditions to bindparam for post-replacement - B. Cherinka
 
 """
 
@@ -50,7 +51,7 @@ from __future__ import print_function
 import pyparsing as pp
 import inspect
 from pyparsing import ParseException  # explicit export
-from sqlalchemy import func
+from sqlalchemy import func, bindparam
 from sqlalchemy.sql import or_, and_, not_, sqltypes
 
 
@@ -166,18 +167,19 @@ class Condition(object):
                         % dict(name=self.name, value=self.value))
 
             # Return SQLAlchemy condition based on operator value
+            # self.name is parameter name, lower_field is Table.parameterName
             if self.op == '==':
-                condition = lower_field.__eq__(lower_value)
+                condition = lower_field.__eq__(bindparam(self.name, lower_value))
             elif self.op == '<':
-                condition = lower_field.__lt__(lower_value)
+                condition = lower_field.__lt__(bindparam(self.name, lower_value))
             elif self.op == '<=':
-                condition = lower_field.__le__(lower_value)
+                condition = lower_field.__le__(bindparam(self.name, lower_value))
             elif self.op == '>':
-                condition = lower_field.__gt__(lower_value)
+                condition = lower_field.__gt__(bindparam(self.name, lower_value))
             elif self.op == '>=':
-                condition = lower_field.__ge__(lower_value)
+                condition = lower_field.__ge__(bindparam(self.name, lower_value))
             elif self.op == '!=':
-                condition = lower_field.__ne__(lower_value)
+                condition = lower_field.__ne__(bindparam(self.name, lower_value))
             elif self.op == '=':
                 # this operator maps to LIKE
                 # x=5 -> x LIKE '%5%' (x contains 5)
@@ -186,9 +188,10 @@ class Condition(object):
                 value = self.value
                 if value.find('*') >= 0:
                     value = value.replace('*', '%')
-                    condition = field.ilike(value)
+                    newbind = bindparam(self.name, value)
+                    condition = field.ilike(newbind)
                 else:
-                    condition = field.ilike('%' + value + '%')
+                    condition = field.ilike('%'+bindparam(self.name, value)+'%')
 
         return condition
 
@@ -278,6 +281,7 @@ expression_parser = pp.operatorPrecedence(condition, [
 ])
 
 params = {}
+
 
 def parse_boolean_search(boolean_search):
     """ Parses the boolean search expression into a hierarchy of boolean operators.
