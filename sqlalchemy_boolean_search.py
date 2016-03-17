@@ -188,8 +188,7 @@ class Condition(object):
                 value = self.value
                 if value.find('*') >= 0:
                     value = value.replace('*', '%')
-                    newbind = bindparam(self.name, value)
-                    condition = field.ilike(newbind)
+                    condition = field.ilike(bindparam(self.name, value))
                 else:
                     condition = field.ilike('%'+bindparam(self.name, value)+'%')
 
