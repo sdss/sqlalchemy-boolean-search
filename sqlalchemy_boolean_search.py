@@ -72,8 +72,6 @@ def get_field(DataModelClass, field_name, base_name=None):
             return getattr(DataModelClass, field_name, None)
         else:
             return None
-        #relationship = getattr(DataModelClass, relationship_name)
-        #return get_field(relationship.property.mapper.entity, field_name)
 
     # Handle flat field names such as 'name'
     return getattr(DataModelClass, field_name, None)
