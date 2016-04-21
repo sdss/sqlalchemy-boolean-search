@@ -136,7 +136,7 @@ class Condition(object):
             # Input is only one DataModelClass
             field = get_field(DataModelClass, self.name)
             if field:
-                condition = self.filter_one(DataModelClass)
+                condition = self.filter_one(DataModelClass, field=field, condition=condition)
             else:
                 raise BooleanSearchException(
                     "Table '%(table_name)s' does not have a field named '%(field_name)s'."
