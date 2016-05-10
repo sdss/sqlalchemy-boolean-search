@@ -84,6 +84,7 @@ class Condition(object):
         where operand can be one of: '<', '<=', '=', '==', '!=', '>=', '>'.
     """
     def __init__(self, data):
+        print('init condition', data)
         self.fullname = data[0][0]
         if '.' in self.fullname:
             self.basename, self.name = self.fullname.split('.', 1)
@@ -200,6 +201,7 @@ class Condition(object):
                     # this operator maps to LIKE
                     # x=5 -> x LIKE '%5%' (x contains 5)
                     # x=5* -> x LIKE '5%' (x starts with 5)
+                    # x=*5 -> x LIKE '%5' (x ends with 5)
                     field = getattr(DataModelClass, self.name)
                     value = self.value
                     if value.find('*') >= 0:
@@ -286,7 +288,7 @@ class BoolOr(object):
 number = pp.Regex(r"[+-]?\d+(:?\.\d*)?(:?[eE][+-]?\d+)?")
 name = pp.Word(pp.alphas + '._', pp.alphanums + '._')
 operator = pp.Regex("==|!=|<=|>=|<|>|=")
-value = pp.Word(pp.alphanums + '_.*') | pp.QuotedString('"') | number
+value = pp.Word(pp.alphanums + '-_.*') | pp.QuotedString('"') | number
 condition = pp.Group(name + operator + value)
 condition.setParseAction(Condition)
 
