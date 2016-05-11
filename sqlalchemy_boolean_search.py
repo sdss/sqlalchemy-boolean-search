@@ -46,14 +46,18 @@ Revision History
 2016-03-16: Changed sqlalchemy values in conditions to bindparam for post-replacement - B. Cherinka
 2016-03-24: Allowed for = to mean equality for non string fields and LIKE for strings - B. Cherinka
           : Changed the dot relationship in get_field to filter on the relationship_name first - B. Cherinka
+2016-05-11: Added support for PostgreSQL array filters, using value op ANY(array) - B. Cherinka
 """
 
 from __future__ import print_function
 import pyparsing as pp
 import inspect
 from pyparsing import ParseException  # explicit export
-from sqlalchemy import func, bindparam
+from sqlalchemy import func, bindparam, dialects
 from sqlalchemy.sql import or_, and_, not_, sqltypes
+from operator import le, ge, gt, lt, eq, ne
+
+opdict = {'<=': le, '>=': ge, '>': gt, '<': lt, '!=': ne, '==': eq, '=': eq}
 
 
 # Define a custom exception class
@@ -182,36 +186,42 @@ class Condition(object):
             # Prepare field and value
             lower_field, lower_value = self.bindAndLowerValue(field)
 
-            # Return SQLAlchemy condition based on operator value
-            # self.name is parameter name, lower_field is Table.parameterName
-            if self.op == '==':
-                condition = lower_field.__eq__(lower_value)
-            elif self.op == '<':
-                condition = lower_field.__lt__(lower_value)
-            elif self.op == '<=':
-                condition = lower_field.__le__(lower_value)
-            elif self.op == '>':
-                condition = lower_field.__gt__(lower_value)
-            elif self.op == '>=':
-                condition = lower_field.__ge__(lower_value)
-            elif self.op == '!=':
-                condition = lower_field.__ne__(lower_value)
-            elif self.op == '=':
-                if isinstance(field.type, sqltypes.TEXT) or isinstance(field.type, sqltypes.VARCHAR):
-                    # this operator maps to LIKE
-                    # x=5 -> x LIKE '%5%' (x contains 5)
-                    # x=5* -> x LIKE '5%' (x starts with 5)
-                    # x=*5 -> x LIKE '%5' (x ends with 5)
-                    field = getattr(DataModelClass, self.name)
-                    value = self.value
-                    if value.find('*') >= 0:
-                        value = value.replace('*', '%')
-                        condition = field.ilike(bindparam(self.fullname, value))
+            # Handle Arrays
+            if isinstance(field.type, dialects.postgresql.base.ARRAY):
+                condition = field.any(self.value, operator=opdict[self.op])
+            else:
+                # Do Normal Scalar Stuff
+
+                # Return SQLAlchemy condition based on operator value
+                # self.name is parameter name, lower_field is Table.parameterName
+                if self.op == '==':
+                    condition = lower_field.__eq__(lower_value)
+                elif self.op == '<':
+                    condition = lower_field.__lt__(lower_value)
+                elif self.op == '<=':
+                    condition = lower_field.__le__(lower_value)
+                elif self.op == '>':
+                    condition = lower_field.__gt__(lower_value)
+                elif self.op == '>=':
+                    condition = lower_field.__ge__(lower_value)
+                elif self.op == '!=':
+                    condition = lower_field.__ne__(lower_value)
+                elif self.op == '=':
+                    if isinstance(field.type, sqltypes.TEXT) or isinstance(field.type, sqltypes.VARCHAR):
+                        # this operator maps to LIKE
+                        # x=5 -> x LIKE '%5%' (x contains 5)
+                        # x=5* -> x LIKE '5%' (x starts with 5)
+                        # x=*5 -> x LIKE '%5' (x ends with 5)
+                        field = getattr(DataModelClass, self.name)
+                        value = self.value
+                        if value.find('*') >= 0:
+                            value = value.replace('*', '%')
+                            condition = field.ilike(bindparam(self.fullname, value))
+                        else:
+                            condition = field.ilike('%'+bindparam(self.fullname, value)+'%')
                     else:
-                        condition = field.ilike('%'+bindparam(self.fullname, value)+'%')
-                else:
-                    # if not a text column, then use "=" as a straight equals
-                    condition = lower_field.__eq__(boundvalue)
+                        # if not a text column, then use "=" as a straight equals
+                        condition = lower_field.__eq__(boundvalue)
 
         return condition
 
