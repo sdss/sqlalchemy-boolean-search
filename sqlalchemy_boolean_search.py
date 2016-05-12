@@ -88,7 +88,6 @@ class Condition(object):
         where operand can be one of: '<', '<=', '=', '==', '!=', '>=', '>'.
     """
     def __init__(self, data):
-        print('init condition', data)
         self.fullname = data[0][0]
         if '.' in self.fullname:
             self.basename, self.name = self.fullname.split('.', 1)
