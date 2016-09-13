@@ -109,7 +109,6 @@ class Condition(object):
     """
     def __init__(self, data):
         self.fullname = data[0][0]
-        print(self.fullname)
         if '.' in self.fullname:
             self.basename, self.name = self.fullname.split('.', 1)
         else:
