@@ -47,6 +47,8 @@ Revision History
 2016-03-24: Allowed for = to mean equality for non string fields and LIKE for strings - B. Cherinka
           : Changed the dot relationship in get_field to filter on the relationship_name first - B. Cherinka
 2016-05-11: Added support for PostgreSQL array filters, using value op ANY(array) - B. Cherinka
+2016-09-12: Modified to allow for function names (with nested expression) in the expression - B. Cherinka
+2016-09-12: Modified to separate out function conditions from regular conditions
 """
 
 from __future__ import print_function
@@ -83,12 +85,31 @@ def get_field(DataModelClass, field_name, base_name=None):
 
 # ***** Define the expression element classes *****
 
+class FxnCondition(object):
+    ''' Represents a fxn-operand-value condition where
+    the fxn is a function containing a new condition
+    '''
+    def __init__(self, data):
+        self.fxn = data[0][0]
+        self.fxnname = self.fxn[0]
+        self.fxncond = self.fxn[1]
+        self.op = data[0][1]
+        self.value = data[0][2]
+
+    def filter(self, DataModelClass):
+        return None
+
+    def __repr__(self):
+        return '{0}({1})'.format(self.fxnname, self.fxncond) + self.op + self.value
+
+
 class Condition(object):
     """ Represents a 'name operand value' condition,
         where operand can be one of: '<', '<=', '=', '==', '!=', '>=', '>'.
     """
     def __init__(self, data):
         self.fullname = data[0][0]
+        print(self.fullname)
         if '.' in self.fullname:
             self.basename, self.name = self.fullname.split('.', 1)
         else:
@@ -104,8 +125,10 @@ class Condition(object):
 
         condition = None
         if inspect.ismodule(DataModelClass):
+            # one module
             models = [i[1] for i in inspect.getmembers(DataModelClass, inspect.isclass) if hasattr(i[1], '__tablename__')]
         else:
+            # list of Model Classes
             if isinstance(DataModelClass, list):
                 models = DataModelClass
             else:
@@ -234,13 +257,13 @@ class BoolNot(object):
     def __init__(self, data):
         self.condition = data[0][1]
         if isinstance(self.condition, Condition) and self.condition.name not in params:
-            #params.append(self.condition.name)
             params.update({self.condition.fullname: self.condition.value})
 
     def filter(self, DataModelClass):
         """ Return the operator as a SQLAlchemy not_() condition
         """
-        return not_(self.condition.filter(DataModelClass))
+        if not isinstance(self.condition, FxnCondition):
+            return not_(self.condition.filter(DataModelClass))
 
     def __repr__(self):
         return 'not_(' + repr(self.condition) + ')'
@@ -250,20 +273,25 @@ class BoolAnd(object):
     """ Represents the boolean operator AND
     """
     def __init__(self, data):
-        #self.conditions = [condition for condition in data[0] if condition and condition != 'and']
         self.conditions = []
         for condition in data[0]:
             if condition and condition != 'and':
-                self.conditions.append(condition)
+                if isinstance(condition, FxnCondition):
+                    functions.append(condition)
+                else:
+                    self.conditions.append(condition)
                 if isinstance(condition, Condition) and condition.name not in params:
-                    #params.append(condition.name)
                     params.update({condition.fullname: condition.value})
 
     def filter(self, DataModelClass):
         """ Return the operator as a SQLAlchemy and_() condition
         """
-        conditions = [condition.filter(DataModelClass) for condition in self.conditions]
+        conditions = [condition.filter(DataModelClass) for condition in self.conditions if not isinstance(condition, FxnCondition)]
         return and_(*conditions)  # * converts list to argument sequence
+
+    def removeFunctions(self):
+        ''' remove the fxn conditions '''
+        self.conditions = [condition for condition in self.conditions if not isinstance(condition, FxnCondition)]
 
     def __repr__(self):
         return 'and_(' + ', '.join([repr(condition) for condition in self.conditions]) + ')'
@@ -273,55 +301,77 @@ class BoolOr(object):
     """ Represents the boolean operator OR
     """
     def __init__(self, data):
-        #self.conditions = [condition for condition in data[0] if condition and condition != 'or']
         self.conditions = []
         for condition in data[0]:
             if condition and condition != 'or':
-                self.conditions.append(condition)
+                if isinstance(condition, FxnCondition):
+                    functions.append(condition)
+                else:
+                    self.conditions.append(condition)
                 if isinstance(condition, Condition) and condition.name not in params:
-                    #params.append(condition.name)
                     params.update({condition.fullname: condition.value})
 
     def filter(self, DataModelClass):
         """ Return the operator as a SQLAlchemy or_() condition
         """
-        conditions = [condition.filter(DataModelClass) for condition in self.conditions]
+        conditions = [condition.filter(DataModelClass) for condition in self.conditions if not isinstance(condition, FxnCondition)]
         return or_(*conditions)  # * converts list to argument sequence
 
     def __repr__(self):
         return 'or_(' + ', '.join([repr(condition) for condition in self.conditions]) + ')'
 
+    def removeFunctions(self):
+        ''' remove the fxn conditions '''
+        self.conditions = [condition for condition in self.conditions if not isinstance(condition, FxnCondition)]
+
 # ***** Define the boolean condition expressions *****
 
 # Define expression elements
+LPAR = pp.Suppress('(')
+RPAR = pp.Suppress(')')
 number = pp.Regex(r"[+-]?\d+(:?\.\d*)?(:?[eE][+-]?\d+)?")
 name = pp.Word(pp.alphas + '._', pp.alphanums + '._')
 operator = pp.Regex("==|!=|<=|>=|<|>|=")
 value = pp.Word(pp.alphanums + '-_.*') | pp.QuotedString('"') | number
+
+whereexp = pp.Forward()
+# condition
 condition = pp.Group(name + operator + value)
 condition.setParseAction(Condition)
+# fxn condition
+function_call = pp.Group(pp.Word(pp.alphas) + LPAR + condition + RPAR)
+fxn_cond = pp.Group(function_call + operator + value)
+fxn_cond.setParseAction(FxnCondition)
+# combine
+wherecond = condition | fxn_cond
+whereexp <<= wherecond
 
 # Define the expression as a hierarchy of boolean operators
 # with the following precedence: NOT > AND > OR
-expression_parser = pp.operatorPrecedence(condition, [
+expression_parser = pp.operatorPrecedence(whereexp, [
     (pp.CaselessLiteral("not"), 1, pp.opAssoc.RIGHT, BoolNot),
     (pp.CaselessLiteral("and"), 2, pp.opAssoc.LEFT, BoolAnd),
     (pp.CaselessLiteral("or"), 2, pp.opAssoc.LEFT, BoolOr),
 ])
 
 params = {}
+functions = []
 
 
 def parse_boolean_search(boolean_search):
     """ Parses the boolean search expression into a hierarchy of boolean operators.
         Returns a BoolNot or BoolAnd or BoolOr object.
     """
-    global params
+    global params, functions
     params = {}
+    functions = []
     try:
         expression = expression_parser.parseString(boolean_search)[0]
-        expression.params = params
-        return expression
     except ParseException as e:
         raise BooleanSearchException("Syntax error at offset %(offset)s." % dict(offset=e.col))
+    else:
+        expression.params = params
+        expression.functions = functions
+        return expression
+
 
