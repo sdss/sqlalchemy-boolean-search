@@ -209,7 +209,7 @@ class Condition(object):
             lower_field, lower_value = self.bindAndLowerValue(field)
 
             # Handle Arrays
-            if isinstance(field.type, dialects.postgresql.base.ARRAY):
+            if isinstance(field.type, dialects.postgresql.ARRAY):
                 condition = field.any(self.value, operator=opdict[self.op])
             else:
                 # Do Normal Scalar Stuff
