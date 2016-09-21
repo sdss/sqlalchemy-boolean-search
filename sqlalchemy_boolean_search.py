@@ -49,6 +49,7 @@ Revision History
 2016-05-11: Added support for PostgreSQL array filters, using value op ANY(array) - B. Cherinka
 2016-09-12: Modified to allow for function names (with nested expression) in the expression - B. Cherinka
 2016-09-12: Modified to separate out function conditions from regular conditions
+2016-09-21: Modified field checks to allow for hybrid properties to pass through - B. Cherinka
 """
 
 from __future__ import print_function
@@ -147,11 +148,11 @@ class Condition(object):
                     ptype = None
                     ilike = None
 
-                if field and ptype and ilike:
+                if not isinstance(field, type(None)) and ptype and ilike:
                     index = i
                     break
 
-            if not field:
+            if isinstance(field, type(None)):
                 raise BooleanSearchException(
                     "Table '%(table_name)s' does not have a field named '%(field_name)s'."
                     % dict(table_name=model.__tablename__, field_name=self.name))
@@ -203,7 +204,7 @@ class Condition(object):
     def filter_one(self, DataModelClass, field=None, condition=None):
         """ Return the condition as a SQLAlchemy query condition
         """
-        if field:
+        if not isinstance(field, type(None)):
             # Prepare field and value
             lower_field, lower_value = self.bindAndLowerValue(field)
 
@@ -228,7 +229,9 @@ class Condition(object):
                 elif self.op == '!=':
                     condition = lower_field.__ne__(lower_value)
                 elif self.op == '=':
-                    if isinstance(field.type, sqltypes.TEXT) or isinstance(field.type, sqltypes.VARCHAR):
+                    if isinstance(field.type, sqltypes.TEXT) or \
+                       isinstance(field.type, sqltypes.VARCHAR) or \
+                       isinstance(field.type, sqltypes.String):
                         # this operator maps to LIKE
                         # x=5 -> x LIKE '%5%' (x contains 5)
                         # x=5* -> x LIKE '5%' (x starts with 5)
