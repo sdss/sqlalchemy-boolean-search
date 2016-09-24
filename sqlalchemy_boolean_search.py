@@ -50,11 +50,13 @@ Revision History
 2016-09-12: Modified to allow for function names (with nested expression) in the expression - B. Cherinka
 2016-09-12: Modified to separate out function conditions from regular conditions
 2016-09-21: Modified field checks to allow for hybrid properties to pass through - B. Cherinka
+2016-09-24: Added in Decimal field as an fieldtype option - B. Cherinka
 """
 
 from __future__ import print_function
 import pyparsing as pp
 import inspect
+import decimal
 from pyparsing import ParseException  # explicit export
 from sqlalchemy import func, bindparam, dialects
 from sqlalchemy.sql import or_, and_, not_, sqltypes
@@ -175,9 +177,9 @@ class Condition(object):
         '''Bind and lower the value based on field type '''
 
         # get python field type
+        ftypes = [float, int, decimal.Decimal]
         fieldtype = field.type.python_type
-
-        if fieldtype == float:
+        if fieldtype == float or fieldtype == decimal.Decimal:
             try:
                 value = float(self.value)
                 lower_field = field
@@ -197,7 +199,7 @@ class Condition(object):
 
         # Bind the parameter value to the parameter name
         boundvalue = bindparam(self.fullname, value)
-        lower_value = func.lower(boundvalue) if fieldtype not in [float, int] else boundvalue
+        lower_value = func.lower(boundvalue) if fieldtype not in ftypes else boundvalue
 
         return lower_field, lower_value
 
