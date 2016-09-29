@@ -51,6 +51,7 @@ Revision History
 2016-09-12: Modified to separate out function conditions from regular conditions
 2016-09-21: Modified field checks to allow for hybrid properties to pass through - B. Cherinka
 2016-09-24: Added in Decimal field as an fieldtype option - B. Cherinka
+2016-09-29: Modified the bindparam name to allow for value ranges of a single name - B. Cherinka
 """
 
 from __future__ import print_function
@@ -119,7 +120,13 @@ class Condition(object):
             self.name = self.fullname
         self.op = data[0][1]
         self.value = data[0][2]
-        if self.name not in params:
+        uniqueparams.append(self.fullname)
+        if self.fullname not in params:
+            params.update({self.fullname: self.value})
+            self.bindname = self.fullname
+        else:
+            count = params.keys().count(self.fullname)
+            self.bindname = '{0}_{1}'.format(self.fullname, count)
             params.update({self.fullname: self.value})
 
     def filter(self, DataModelClass):
@@ -198,7 +205,7 @@ class Condition(object):
             value = self.value
 
         # Bind the parameter value to the parameter name
-        boundvalue = bindparam(self.fullname, value)
+        boundvalue = bindparam(self.bindname, value)
         lower_value = func.lower(boundvalue) if fieldtype not in ftypes else boundvalue
 
         return lower_field, lower_value
@@ -242,9 +249,9 @@ class Condition(object):
                         value = self.value
                         if value.find('*') >= 0:
                             value = value.replace('*', '%')
-                            condition = field.ilike(bindparam(self.fullname, value))
+                            condition = field.ilike(bindparam(self.bindname, value))
                         else:
-                            condition = field.ilike('%'+bindparam(self.fullname, value)+'%')
+                            condition = field.ilike('%'+bindparam(self.bindname, value)+'%')
                     else:
                         # if not a text column, then use "=" as a straight equals
                         condition = lower_field.__eq__(boundvalue)
@@ -359,6 +366,7 @@ expression_parser = pp.operatorPrecedence(whereexp, [
 ])
 
 params = {}
+uniqueparams = []
 functions = []
 
 
@@ -366,8 +374,9 @@ def parse_boolean_search(boolean_search):
     """ Parses the boolean search expression into a hierarchy of boolean operators.
         Returns a BoolNot or BoolAnd or BoolOr object.
     """
-    global params, functions
+    global params, functions, uniqueparams
     params = {}
+    uniqueparams = []
     functions = []
     try:
         expression = expression_parser.parseString(boolean_search)[0]
@@ -375,6 +384,7 @@ def parse_boolean_search(boolean_search):
         raise BooleanSearchException("Syntax error at offset %(offset)s." % dict(offset=e.col))
     else:
         expression.params = params
+        expression.uniqueparams = list(set(uniqueparams))
         expression.functions = functions
         return expression
 
