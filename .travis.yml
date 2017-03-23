@@ -22,4 +22,4 @@ install:
 
 # Run automated tests
 script:
-  - py.test flask_user/tests/
+  - sh runtests.sh
