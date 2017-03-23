@@ -20,10 +20,11 @@ install:
   - pip install -r requirements.txt --quiet
   - pip install pytest
   - pip install coveralls
+  - pip install python-coveralls
 
 # Run automated tests
 script:
-  - sh runtests.sh
+  - py.test tests --pep8 coveralls -v --cov sqlalchemy_boolean_search.py --cov-report term-missing
 
 after_success:
 - coveralls
