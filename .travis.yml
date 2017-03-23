@@ -24,7 +24,7 @@ install:
 
 # Run automated tests
 script:
-  - py.test tests --pep8 coveralls -v --cov sqlalchemy_boolean_search.py --cov-report term-missing
+  - py.test tests --pep8 coveralls -v --cov sqlalchemy_boolean_search --cov-report term-missing
 
 after_success:
 - coveralls
