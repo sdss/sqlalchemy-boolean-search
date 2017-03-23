@@ -1,13 +1,13 @@
 # Flask
-Flask==0.10.1
+Flask>=0.10.1
 
 # Flask packages
-Flask-SQLAlchemy==1.0
+Flask-SQLAlchemy>=1.0
 
 # Python packages
-pyparsing==2.0.3
+pyparsing>=2.0.3
 
 # Testing
-pytest==2.7.2
-pytest-flask==0.8.1
-pytest-cov==1.8.1
+pytest>=2.7.2
+pytest-flask>=0.8.1
+pytest-cov>=1.8.1

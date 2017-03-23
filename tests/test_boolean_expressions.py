@@ -29,3 +29,38 @@ def test_boolean_expressions():
     expression = parse_boolean_search('field1=*something* and not (field2==1 or field3<=10.0)')
     assert repr(expression) == 'and_(field1=*something*, not_(or_(field2==1, field3<=10.0)))'
 
+    # Test range
+    expr = parse_boolean_search('a >= 4 and a < 6')
+    assert repr(expr) == 'and_(a>=4, a<6)'
+
+
+def test_boolean_params():
+    expr = parse_boolean_search('a < 1 and b > 2')
+    assert 'a' in expr.params
+    assert 'b' in expr.params
+    assert ['a', 'b'] == expr.uniqueparams
+    assert expr.conditions is not []
+
+
+def test_condition_nobase():
+    expr = parse_boolean_search('a < 1 and b > 2')
+    cond = expr.conditions[0]
+    assert repr(cond) == 'a<1'
+    assert cond.name == 'a'
+    assert cond.basename is None
+    assert cond.fullname == 'a'
+    assert cond.op == '<'
+    assert cond.value == '1'
+
+
+def test_condition_base():
+    expr = parse_boolean_search('table.a < 1 and b > 2')
+    cond = expr.conditions[0]
+    assert repr(cond) == 'table.a<1'
+    assert cond.name == 'a'
+    assert cond.basename == 'table'
+    assert cond.fullname == 'table.a'
+    assert cond.op == '<'
+    assert cond.value == '1'
+
+

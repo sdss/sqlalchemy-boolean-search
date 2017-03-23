@@ -2,9 +2,9 @@
 #
 # Authors: Ling Thio <ling.thio@gmail.com>
 
-from flask import Flask
 import os
 import pytest
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
 
@@ -15,8 +15,6 @@ the_app.config.update(
     SECRET_KEY='KeepThisSecret',
     SQLALCHEMY_DATABASE_URI='sqlite:///app.sqlite',
 )
-
-from . import models
 
 
 @pytest.fixture(scope='session')

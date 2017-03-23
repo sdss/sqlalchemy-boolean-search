@@ -59,7 +59,8 @@ import pyparsing as pp
 import inspect
 import decimal
 from pyparsing import ParseException  # explicit export
-from sqlalchemy import func, bindparam, dialects
+from sqlalchemy import func, bindparam
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import or_, and_, not_, sqltypes
 from operator import le, ge, gt, lt, eq, ne
 
@@ -218,7 +219,7 @@ class Condition(object):
             lower_field, lower_value = self.bindAndLowerValue(field)
 
             # Handle Arrays
-            if isinstance(field.type, dialects.postgresql.ARRAY):
+            if isinstance(field.type, postgresql.ARRAY):
                 condition = field.any(self.value, operator=opdict[self.op])
             else:
                 # Do Normal Scalar Stuff
@@ -251,7 +252,7 @@ class Condition(object):
                             value = value.replace('*', '%')
                             condition = field.ilike(bindparam(self.bindname, value))
                         else:
-                            condition = field.ilike('%'+bindparam(self.bindname, value)+'%')
+                            condition = field.ilike('%' + bindparam(self.bindname, value) + '%')
                     else:
                         # if not a text column, then use "=" as a straight equals
                         condition = lower_field.__eq__(boundvalue)
