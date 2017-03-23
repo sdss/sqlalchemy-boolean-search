@@ -19,7 +19,11 @@ branches:
 install:
   - pip install -r requirements.txt --quiet
   - pip install pytest
+  - pip install coveralls
 
 # Run automated tests
 script:
   - sh runtests.sh
+
+after_success:
+- coveralls
