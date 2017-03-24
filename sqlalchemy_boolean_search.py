@@ -126,7 +126,7 @@ class Condition(object):
             params.update({self.fullname: self.value})
             self.bindname = self.fullname
         else:
-            count = params.keys().count(self.fullname)
+            count = list(params.keys()).count(self.fullname)
             self.bindname = '{0}_{1}'.format(self.fullname, count)
             params.update({self.fullname: self.value})
 

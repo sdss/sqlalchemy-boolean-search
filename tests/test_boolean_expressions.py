@@ -38,7 +38,7 @@ def test_boolean_params():
     expr = parse_boolean_search('a < 1 and b > 2')
     assert 'a' in expr.params
     assert 'b' in expr.params
-    assert ['a', 'b'] == expr.uniqueparams
+    assert sorted(['a', 'b']) == sorted(expr.uniqueparams)
     assert expr.conditions is not []
 
 
