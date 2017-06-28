@@ -33,6 +33,13 @@ def test_boolean_expressions():
     expr = parse_boolean_search('a >= 4 and a < 6')
     assert repr(expr) == 'and_(a>=4, a<6)'
 
+    # Test between
+    expr = parse_boolean_search('a between 1 and 2')
+    assert repr(expr) == 'abetween1and2'
+
+    expr = parse_boolean_search('a between 1 and 2 or c > 10')
+    assert repr(expr) == 'or_(abetween1and2, c>10)'
+
 
 def test_boolean_params():
     expr = parse_boolean_search('a < 1 and b > 2')

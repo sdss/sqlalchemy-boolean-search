@@ -61,7 +61,7 @@ import decimal
 from pyparsing import ParseException  # explicit export
 from sqlalchemy import func, bindparam
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.sql import or_, and_, not_, sqltypes
+from sqlalchemy.sql import or_, and_, not_, sqltypes, between
 from operator import le, ge, gt, lt, eq, ne
 
 opdict = {'<=': le, '>=': ge, '>': gt, '<': lt, '!=': ne, '==': eq, '=': eq}
@@ -121,6 +121,9 @@ class Condition(object):
             self.name = self.fullname
         self.op = data[0][1]
         self.value = data[0][2]
+        print('data', data)
+        if self.op == 'between':
+            self.value2 = data[0][4]
         uniqueparams.append(self.fullname)
         if self.fullname not in params:
             params.update({self.fullname: self.value})
@@ -181,42 +184,74 @@ class Condition(object):
 
         return condition
 
+    def format_value(self, value, fieldtype, field):
+        ''' Formats the value based on the fieldtype '''
+
+        if fieldtype == float or fieldtype == decimal.Decimal:
+            try:
+                outvalue = float(value)
+                lower_field = field
+            except:
+                raise BooleanSearchException(
+                    "Field {0} expects a float value. Received value {1} instead.".format(self.name, value))
+        elif fieldtype == int:
+            try:
+                outvalue = int(value)
+                lower_field = field
+            except:
+                raise BooleanSearchException(
+                    "Field {0} expects an integer value. Received value {1} instead.".format(self.name, value))
+        else:
+            lower_field = func.lower(field)
+            outvalue = value
+
+        return outvalue, lower_field
+
     def bindAndLowerValue(self, field):
         '''Bind and lower the value based on field type '''
 
+        lower_value_2 = None
         # get python field type
         ftypes = [float, int, decimal.Decimal]
         fieldtype = field.type.python_type
-        if fieldtype == float or fieldtype == decimal.Decimal:
-            try:
-                value = float(self.value)
-                lower_field = field
-            except:
-                raise BooleanSearchException(
-                    "Field {0} expects a float value. Received value {1} instead.".format(self.name, self.value))
-        elif fieldtype == int:
-            try:
-                value = int(self.value)
-                lower_field = field
-            except:
-                raise BooleanSearchException(
-                    "Field {0} expects an integer value. Received value {1} instead.".format(self.name, self.value))
-        else:
-            lower_field = func.lower(field)
-            value = self.value
+        # if fieldtype == float or fieldtype == decimal.Decimal:
+        #     try:
+        #         value = float(self.value)
+        #         lower_field = field
+        #     except:
+        #         raise BooleanSearchException(
+        #             "Field {0} expects a float value. Received value {1} instead.".format(self.name, self.value))
+        # elif fieldtype == int:
+        #     try:
+        #         value = int(self.value)
+        #         lower_field = field
+        #     except:
+        #         raise BooleanSearchException(
+        #             "Field {0} expects an integer value. Received value {1} instead.".format(self.name, self.value))
+        # else:
+        #     lower_field = func.lower(field)
+        #     value = self.value
+
+        value, lower_field = self.format_value(self.value, fieldtype, field)
+        if hasattr(self, 'value2'):
+            value2, lower_field = self.format_value(self.value2, fieldtype, field)
 
         # Bind the parameter value to the parameter name
         boundvalue = bindparam(self.bindname, value)
         lower_value = func.lower(boundvalue) if fieldtype not in ftypes else boundvalue
+        if hasattr(self, 'value2'):
+            self.bindname = '{0}_{1}'.format(self.fullname, 2)
+            boundvalue2 = bindparam(self.bindname, value2)
+            lower_value_2 = func.lower(boundvalue2) if fieldtype not in ftypes else boundvalue2
 
-        return lower_field, lower_value
+        return lower_field, lower_value, lower_value_2
 
     def filter_one(self, DataModelClass, field=None, condition=None):
         """ Return the condition as a SQLAlchemy query condition
         """
         if not isinstance(field, type(None)):
             # Prepare field and value
-            lower_field, lower_value = self.bindAndLowerValue(field)
+            lower_field, lower_value, lower_value_2 = self.bindAndLowerValue(field)
 
             # Handle Arrays
             if isinstance(field.type, postgresql.ARRAY):
@@ -255,12 +290,15 @@ class Condition(object):
                             condition = field.ilike('%' + bindparam(self.bindname, value) + '%')
                     else:
                         # if not a text column, then use "=" as a straight equals
-                        condition = lower_field.__eq__(boundvalue)
+                        condition = lower_field.__eq__(lower_value)
+                elif self.op == 'between':
+                    condition = between(lower_field, lower_value, lower_value_2)
 
         return condition
 
     def __repr__(self):
-        return self.fullname + self.op + self.value
+        more = 'and' + self.value2 if hasattr(self, 'value2') else ''
+        return self.fullname + self.op + self.value + more
 
 
 class BoolNot(object):
@@ -350,12 +388,15 @@ whereexp = pp.Forward()
 # condition
 condition = pp.Group(name + operator + value)
 condition.setParseAction(Condition)
+# between condition
+between_cond = pp.Group(name + pp.CaselessLiteral('between') + value + pp.CaselessLiteral('and') + value)
+between_cond.setParseAction(Condition)
 # fxn condition
 function_call = pp.Group(pp.Word(pp.alphas) + LPAR + condition + RPAR)
 fxn_cond = pp.Group(function_call + operator + value)
 fxn_cond.setParseAction(FxnCondition)
 # combine
-wherecond = condition | fxn_cond
+wherecond = condition | fxn_cond | between_cond
 whereexp <<= wherecond
 
 # Define the expression as a hierarchy of boolean operators
