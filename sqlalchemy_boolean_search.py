@@ -121,7 +121,6 @@ class Condition(object):
             self.name = self.fullname
         self.op = data[0][1]
         self.value = data[0][2]
-        print('data', data)
         if self.op == 'between':
             self.value2 = data[0][4]
         uniqueparams.append(self.fullname)
@@ -214,23 +213,6 @@ class Condition(object):
         # get python field type
         ftypes = [float, int, decimal.Decimal]
         fieldtype = field.type.python_type
-        # if fieldtype == float or fieldtype == decimal.Decimal:
-        #     try:
-        #         value = float(self.value)
-        #         lower_field = field
-        #     except:
-        #         raise BooleanSearchException(
-        #             "Field {0} expects a float value. Received value {1} instead.".format(self.name, self.value))
-        # elif fieldtype == int:
-        #     try:
-        #         value = int(self.value)
-        #         lower_field = field
-        #     except:
-        #         raise BooleanSearchException(
-        #             "Field {0} expects an integer value. Received value {1} instead.".format(self.name, self.value))
-        # else:
-        #     lower_field = func.lower(field)
-        #     value = self.value
 
         value, lower_field = self.format_value(self.value, fieldtype, field)
         if hasattr(self, 'value2'):
