@@ -4,6 +4,7 @@
 
 from __future__ import print_function
 from sqlalchemy_boolean_search import parse_boolean_search
+import pytest
 
 
 def test_boolean_expressions():
@@ -39,6 +40,41 @@ def test_boolean_expressions():
 
     expr = parse_boolean_search('a between 1 and 2 or c > 10')
     assert repr(expr) == 'or_(abetween1and2, c>10)'
+
+
+def test_boolean_functions():
+    # Test function expression
+    expr = parse_boolean_search('func(a > 5) < 40')
+    assert repr(expr) == 'func(a>5)<40'
+    assert hasattr(expr, 'fxn_name')
+    assert expr.fxn_name == 'func'
+    assert repr(expr.condition) == 'a>5'
+    assert expr.value == '40'
+    assert not hasattr(expr, 'conditions')
+
+    # Test function cone
+    expr = parse_boolean_search('cone(3.4, 5.6, 1)')
+    assert repr(expr) == 'cone(3.4,5.6,1)'
+    assert expr.fxn_name == 'cone'
+    assert expr.value == '1'
+    assert expr.coords == ['3.4', '5.6']
+    assert not hasattr(expr, 'conditions')
+
+
+@pytest.mark.parametrize('expression',
+                         [('b < 2 and func(a > 5) < 40'),
+                          ('b < 2 or func(a > 5) < 40'),
+                          ('b < 2 and cone(3.4, 5.6, 1)'),
+                          ('b < 2 or cone(3.4, 5.6, 1)')])
+def test_boolean_fxn_andor(expression):
+    expr = parse_boolean_search(expression)
+    assert hasattr(expr, 'conditions')
+    assert hasattr(expr, 'functions')
+    assert expr.conditions
+    assert expr.functions
+    assert len(expr.conditions) == 1
+    assert len(expr.functions) == 1
+    assert repr(expr.conditions[0]) == 'b<2'
 
 
 def test_boolean_params():

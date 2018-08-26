@@ -55,11 +55,12 @@ Revision History
 """
 
 from __future__ import print_function
-import pyparsing as pp
+import copy
 import inspect
 import decimal
+import pyparsing as pp
 from pyparsing import ParseException  # explicit export
-from sqlalchemy import func, bindparam
+from sqlalchemy import func, bindparam, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import or_, and_, not_, sqltypes, between
 from operator import le, ge, gt, lt, eq, ne
@@ -91,21 +92,65 @@ def get_field(DataModelClass, field_name, base_name=None):
 # ***** Define the expression element classes *****
 
 class FxnCondition(object):
-    ''' Represents a fxn-operand-value condition where
-    the fxn is a function containing a new condition
-    '''
+    ''' Base function condition '''
     def __init__(self, data):
-        self.fxn = data[0][0]
-        self.fxnname = self.fxn[0]
-        self.fxncond = self.fxn[1]
-        self.op = data[0][1]
-        self.value = data[0][2]
+        self.data = data[0].asDict()
+        self.fxn_name = self.data.get('fxn', None)
+        self.args = self.data.get('args', None)
+        self.kwargs = self.data.get('kwargs', None)
 
     def filter(self, DataModelClass):
-        return None
+        #return text(self.fxn_name)
+        pass
 
     def __repr__(self):
-        return '{0}({1})'.format(self.fxnname, self.fxncond) + self.op + self.value
+        args = self.args if self.args else []
+        kwargs = [k + '=' + g for k, g in self.kwargs.items()] if self.kwargs else []
+        all_args = ','.join(args + kwargs)
+        return '{0}({1})'.format(self.fxn_name, all_args)
+
+
+class ConeCondition(FxnCondition):
+    ''' Condition for cone searches '''
+    def __init__(self, data):
+        super(ConeCondition, self).__init__(data)
+
+        if self.kwargs:
+            self.coords = (self.kwargs.get('ra', None), self.kwargs.get('dec', None))
+            self.value = self.kwargs.get('radius', None)
+        elif self.args:
+            assert len(self.args) >= 3, 'Must have at least three arguments to make a cone condition'
+            coorda, coordb, value = self.args[0:3]
+            self.coords = [coorda, coordb]
+            self.value = value
+
+
+class HistCondition(FxnCondition):
+    ''' Conditon for histogram searches '''
+
+    def __init__(self, data):
+        super(HistCondition, self).__init__(data)
+
+        if self.args:
+            assert len(self.args) >= 4, 'Must have at least four arguments to make a histogram condition'
+            self.parameters = self.args[:-3]
+            self.n_bins, self.low_edges, self.upp_edges = self.args[-3:]
+
+
+class ExprCondition(FxnCondition):
+    ''' Condition for a functional condition search '''
+
+    def __init__(self, data):
+        super(ExprCondition, self).__init__(data)
+        self.data = data[0].asDict()
+        self.fxn_call = self.data.get('call', None)
+        self.fxn_name = self.fxn_call.get('fxn', None)
+        self.condition = self.fxn_call.get('condition', None)
+        self.operator = self.data.get('operator', None)
+        self.value = self.data.get('value', None)
+
+    def __repr__(self):
+        return '{0}({1})'.format(self.fxn_name, repr(self.condition)) + self.operator + self.value
 
 
 class Condition(object):
@@ -113,17 +158,36 @@ class Condition(object):
         where operand can be one of: '<', '<=', '=', '==', '!=', '>=', '>'.
     """
     def __init__(self, data):
-        self.fullname = data[0][0]
+        self.data = data[0].asDict()
+
+        self._parse_parameter_name()
+        self.op = self.data.get('operator')
+
+        self._extract_values()
+
+        uniqueparams.append(self.fullname)
+        self._bind_parameter_names()
+
+    def _parse_parameter_name(self):
+        ''' parse the parameter name into a base + name '''
+        self.fullname = self.data.get('parameter')
         if '.' in self.fullname:
             self.basename, self.name = self.fullname.split('.', 1)
         else:
             self.basename = None
             self.name = self.fullname
-        self.op = data[0][1]
-        self.value = data[0][2]
-        if self.op == 'between':
-            self.value2 = data[0][4]
-        uniqueparams.append(self.fullname)
+
+    def _extract_values(self):
+        ''' Extract the value or values from the condition '''
+        self.value = self.data.get('value', None)
+        if not self.value:
+            if self.op == 'between':
+                self.value = self.data.get('value1')
+                self.value2 = self.data.get('value2')
+
+    def _bind_parameter_names(self):
+        ''' Bind the parameters names to the values '''
+
         if self.fullname not in params:
             params.update({self.fullname: self.value})
             self.bindname = self.fullname
@@ -274,7 +338,11 @@ class Condition(object):
                         # if not a text column, then use "=" as a straight equals
                         condition = lower_field.__eq__(lower_value)
                 elif self.op == 'between':
+                    # between condition
                     condition = between(lower_field, lower_value, lower_value_2)
+                elif self.op in ['&', '|', '~']:
+                    # bitwise operations
+                    condition = lower_field.op(self.op)(lower_value) > 0
 
         return condition
 
@@ -283,13 +351,18 @@ class Condition(object):
         return self.fullname + self.op + self.value + more
 
 
+def update_params(condition):
+    ''' update the global params list with parameter/value '''
+    if isinstance(condition, Condition) and condition.name not in params:
+        params.update({condition.fullname: condition.value})
+
+
 class BoolNot(object):
     """ Represents the boolean operator NOT
     """
     def __init__(self, data):
         self.condition = data[0][1]
-        if isinstance(self.condition, Condition) and self.condition.name not in params:
-            params.update({self.condition.fullname: self.condition.value})
+        update_params(self.condition)
 
     def filter(self, DataModelClass):
         """ Return the operator as a SQLAlchemy not_() condition
@@ -312,18 +385,21 @@ class BoolAnd(object):
                     functions.append(condition)
                 else:
                     self.conditions.append(condition)
-                if isinstance(condition, Condition) and condition.name not in params:
-                    params.update({condition.fullname: condition.value})
+                #self.conditions.append(condition)
+                update_params(condition)
 
     def filter(self, DataModelClass):
         """ Return the operator as a SQLAlchemy and_() condition
         """
-        conditions = [condition.filter(DataModelClass) for condition in self.conditions if not isinstance(condition, FxnCondition)]
+        # conditions = [condition.filter(DataModelClass) for condition in self.conditions
+        #               if not isinstance(condition, (FxnCondition, ConeCondition))]
+        conditions = [condition.filter(DataModelClass) for condition in self.conditions]
         return and_(*conditions)  # * converts list to argument sequence
 
     def removeFunctions(self):
         ''' remove the fxn conditions '''
-        self.conditions = [condition for condition in self.conditions if not isinstance(condition, FxnCondition)]
+        self.conditions = [condition for condition in self.conditions
+                           if not isinstance(condition, FxnCondition)]
 
     def __repr__(self):
         return 'and_(' + ', '.join([repr(condition) for condition in self.conditions]) + ')'
@@ -340,8 +416,7 @@ class BoolOr(object):
                     functions.append(condition)
                 else:
                     self.conditions.append(condition)
-                if isinstance(condition, Condition) and condition.name not in params:
-                    params.update({condition.fullname: condition.value})
+                update_params(condition)
 
     def filter(self, DataModelClass):
         """ Return the operator as a SQLAlchemy or_() condition
@@ -362,23 +437,57 @@ class BoolOr(object):
 LPAR = pp.Suppress('(')
 RPAR = pp.Suppress(')')
 number = pp.Regex(r"[+-]?\d+(:?\.\d*)?(:?[eE][+-]?\d+)?")
-name = pp.Word(pp.alphas + '._', pp.alphanums + '._')
-operator = pp.Regex("==|!=|<=|>=|<|>|=")
-value = pp.Word(pp.alphanums + '-_.*') | pp.QuotedString('"') | number
+name = pp.Word(pp.alphas + '._', pp.alphanums + '._').setResultsName('parameter')
+#operator = pp.Regex("==|!=|<=|>=|<|>|=|&|~|||").setResultsName('operator')
+operator = pp.oneOf(['==', '<=', '<', '>', '>=', '=', '!=', '&', '~', '|']).setResultsName('operator')
+value = (pp.Word(pp.alphanums + '-_.*') | pp.QuotedString('"') | number).setResultsName('value')
 
+# list of numbers
+nl = pp.delimitedList(number, combine=True)
+narr = pp.Combine('[' + nl + ']')
+
+# function arguments
+arglist = pp.delimitedList(number | (pp.Word(pp.alphanums + '-_') + pp.NotAny('=')) | narr)
+args = pp.Group(arglist).setResultsName('args')
+# function keyword arguments
+key = pp.Word(pp.alphas) + pp.Suppress('=')
+values = (number | pp.Word(pp.alphas))
+keyval = pp.dictOf(key, values)
+kwarglist = pp.delimitedList(keyval)
+kwargs = pp.Group(kwarglist).setResultsName('kwargs')
+# build generic function
+fxn_args = pp.Optional(args) + pp.Optional(kwargs)
+fxn_name = (pp.Word(pp.alphas)).setResultsName('fxn')
+fxn = pp.Group(fxn_name + LPAR + fxn_args + RPAR)
+
+# overall (recursvie) where clause
 whereexp = pp.Forward()
+
 # condition
-condition = pp.Group(name + operator + value)
+condition = pp.Group(name + operator + value).setResultsName('condition')
 condition.setParseAction(Condition)
+
 # between condition
-between_cond = pp.Group(name + pp.CaselessLiteral('between') + value + pp.CaselessLiteral('and') + value)
+between_cond = pp.Group(name + pp.CaselessLiteral('between').setResultsName('operator') +
+                        value.setResultsName('value1') + pp.CaselessLiteral('and') +
+                        value.setResultsName('value2'))
 between_cond.setParseAction(Condition)
-# fxn condition
-function_call = pp.Group(pp.Word(pp.alphas) + LPAR + condition + RPAR)
+
+# fxn expression condition
+function_call = pp.Group(fxn_name + LPAR + condition + RPAR).setResultsName('call')
 fxn_cond = pp.Group(function_call + operator + value)
-fxn_cond.setParseAction(FxnCondition)
-# combine
-wherecond = condition | fxn_cond | between_cond
+fxn_cond.setParseAction(ExprCondition)
+
+# cone fxn conditions
+cone_cond = copy.copy(fxn)
+cone_cond.setParseAction(ConeCondition)
+
+# histogram fxn conditions
+hist_cond = copy.copy(fxn)
+hist_cond.setParseAction(HistCondition)
+
+# combine all conditions together
+wherecond = condition | fxn_cond | between_cond | cone_cond | hist_cond
 whereexp <<= wherecond
 
 # Define the expression as a hierarchy of boolean operators
@@ -405,7 +514,8 @@ def parse_boolean_search(boolean_search):
     try:
         expression = expression_parser.parseString(boolean_search)[0]
     except ParseException as e:
-        raise BooleanSearchException("Syntax error at offset %(offset)s." % dict(offset=e.col))
+        raise BooleanSearchException("Parsing syntax error ({0}) at line:{1}, "
+            "col:{2}".format(e.markInputline(), e.lineno, e.col))
     else:
         expression.params = params
         expression.uniqueparams = list(set(uniqueparams))
