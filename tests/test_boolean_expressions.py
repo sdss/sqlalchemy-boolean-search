@@ -107,3 +107,17 @@ def test_condition_base():
     assert cond.value == '1'
 
 
+@pytest.mark.parametrize('op, value, exp',
+                         [('&', '64', '64'),
+                          ('&', '~64', '-65'),
+                          ('|', '64', '64'),
+                          ('|', '~64', '-65'),
+                          ('<', '~0.1', '0.1')],
+                          ids=['and', 'andnot', 'or', 'ornot', 'none'])
+def test_condition_bitwise(op, value, exp):
+    par = 'table.a {0} {1}'.format(op, value)
+    expr = parse_boolean_search(par)
+    assert expr.value == exp
+
+
+

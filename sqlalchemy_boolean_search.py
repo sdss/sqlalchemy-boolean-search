@@ -182,8 +182,31 @@ class Condition(object):
         self.value = self.data.get('value', None)
         if not self.value:
             if self.op == 'between':
-                self.value = self.data.get('value1')
-                self.value2 = self.data.get('value2')
+                self.value = self._check_bitwise_value(self.data.get('value1'))
+                self.value2 = self._check_bitwise_value(self.data.get('value2'))
+
+        self.value = self._check_bitwise_value(self.value)
+
+    def _check_bitwise_value(self, value):
+        ''' check if value has a bitwise ~ in it
+
+        Removes any bitwise ~ found in a value for a condition.
+        If the operand is a bitwise & or |, convert the ~value to its
+        integer appropriate.  E.g. ~64 -> -65.
+
+        Parameters:
+            value (str): A string numerical value
+
+        Returns:
+            The str value or value converted to the proper bitwise negative
+        '''
+
+        if '~' in value:
+            value = value.replace('~', '')
+            if self.op in ['&', '|']:
+                value = str(-1 * (int(value)) - 1)
+
+        return value
 
     def _bind_parameter_names(self):
         ''' Bind the parameters names to the values '''
@@ -340,7 +363,7 @@ class Condition(object):
                 elif self.op == 'between':
                     # between condition
                     condition = between(lower_field, lower_value, lower_value_2)
-                elif self.op in ['&', '|', '~']:
+                elif self.op in ['&', '|']:
                     # bitwise operations
                     condition = lower_field.op(self.op)(lower_value) > 0
 
@@ -436,10 +459,10 @@ class BoolOr(object):
 # Define expression elements
 LPAR = pp.Suppress('(')
 RPAR = pp.Suppress(')')
-number = pp.Regex(r"[+-]?\d+(:?\.\d*)?(:?[eE][+-]?\d+)?")
+number = pp.Regex(r"[+-~]?\d+(:?\.\d*)?(:?[eE][+-]?\d+)?")
 name = pp.Word(pp.alphas + '._', pp.alphanums + '._').setResultsName('parameter')
 #operator = pp.Regex("==|!=|<=|>=|<|>|=|&|~|||").setResultsName('operator')
-operator = pp.oneOf(['==', '<=', '<', '>', '>=', '=', '!=', '&', '~', '|']).setResultsName('operator')
+operator = pp.oneOf(['==', '<=', '<', '>', '>=', '=', '!=', '&', '|']).setResultsName('operator')
 value = (pp.Word(pp.alphanums + '-_.*') | pp.QuotedString('"') | number).setResultsName('value')
 
 # list of numbers
