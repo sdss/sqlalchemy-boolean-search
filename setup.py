@@ -29,7 +29,7 @@ from setuptools import setup
 
 NAME = 'SQLAlchemy-boolean-search'
 # do not use x.x.x-dev.  things complain.  instead use x.x.xdev
-VERSION = '0.1.1dev'
+VERSION = '0.1.1'
 RELEASE = 'dev' not in VERSION
 
 
