@@ -10,6 +10,7 @@ python:
   - "3.4"
   - "3.5"
   - "3.6"
+  allow_failures:
   - "3.7"
 
 branches:
