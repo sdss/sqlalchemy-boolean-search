@@ -27,13 +27,19 @@ Authors
 
 from setuptools import setup
 
+NAME = 'SQLAlchemy-boolean-search'
+# do not use x.x.x-dev.  things complain.  instead use x.x.xdev
+VERSION = '0.1.1dev'
+RELEASE = 'dev' not in VERSION
+
+
 setup(
-    name='SQLAlchemy-boolean-search',
-    version='0.1.1',
-    url='http://github.com/lingthio/SQLAlchemy-boolean-search',
+    name=NAME,
+    version=VERSION,
+    url='http://github.com/havok2063/SQLAlchemy-boolean-search',
     license='BSD License',
-    author='Ling Thio',
-    author_email='ling.thio@gmail.com',
+    author='Brian Cherinka',
+    author_email='havok2063@gmail.com',
     description='Boolean search expression parser for SQLAlchemy',
     long_description=__doc__,
     keywords='Boolean search Flask SQLAlchemy',
