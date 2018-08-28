@@ -1,6 +1,10 @@
 # SQLAlchemy Boolean Search Change Log
 
-## [0.1.1] - unreleased
+## [0.1.2] - unreleased
+-----------------------
+
+## [0.1.1] - 2018-08-28
+-----------------------
 
 ### Added:
 - Added new parsing rules to handle general functions with args and kwargs
