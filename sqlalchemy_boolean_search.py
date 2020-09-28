@@ -65,7 +65,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import or_, and_, not_, sqltypes, between
 from operator import le, ge, gt, lt, eq, ne
 
-__version__ = '0.1.2dev'
+__version__ = '0.1.2'
 
 opdict = {'<=': le, '>=': ge, '>': gt, '<': lt, '!=': ne, '==': eq, '=': eq}
 
