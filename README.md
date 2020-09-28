@@ -1,3 +1,7 @@
+# Changes
+This repo has diverged from the original fork.  It includes expanded parsing rules; see 0.1.1 changes in the CHANGELOG.  It has also been restructured as a standalone pypi package called `marvin-sqlalchemy-boolean-search`, as its
+primary use is for https://github.com/sdss/marvin.  For a more general standalone package, see https://github.com/havok2063/boolean_parser, which rebuilds this repo functionality.
+
 # SQLAlchemy-boolean-search
 SQLAlchemy-boolean-search translates a boolean search string such as:
 

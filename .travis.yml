@@ -29,7 +29,7 @@ install:
 
 # Run automated tests
 script:
-  - py.test tests -v --cov sqlalchemy_boolean_search --cov-report html
+  - pytest tests -v --cov sqlalchemy_boolean_search --cov-report html
 
 after_success:
 - coveralls
