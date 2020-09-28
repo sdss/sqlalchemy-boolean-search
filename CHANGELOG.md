@@ -1,7 +1,8 @@
 # SQLAlchemy Boolean Search Change Log
 
-## [0.1.2] - unreleased
+## [0.1.2] - 2020-09-28
 -----------------------
+- Tagging before restructure to release to pypi
 
 ## [0.1.1] - 2018-08-28
 -----------------------
