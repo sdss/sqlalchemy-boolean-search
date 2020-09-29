@@ -517,7 +517,7 @@ whereexp <<= wherecond
 
 # Define the expression as a hierarchy of boolean operators
 # with the following precedence: NOT > AND > OR
-expression_parser = pp.operatorPrecedence(whereexp, [
+expression_parser = pp.infixNotation(whereexp, [
     (pp.CaselessLiteral("not"), 1, pp.opAssoc.RIGHT, BoolNot),
     (pp.CaselessLiteral("and"), 2, pp.opAssoc.LEFT, BoolAnd),
     (pp.CaselessLiteral("or"), 2, pp.opAssoc.LEFT, BoolOr),
