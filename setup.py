@@ -6,6 +6,6 @@
 from setuptools import setup
 
 NAME = 'marvin-sqlalchemy-boolean-search'
-VERSION = '0.2.1'
+VERSION = '0.2.2dev'
 
 setup()
