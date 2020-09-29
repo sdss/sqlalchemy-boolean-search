@@ -1,5 +1,9 @@
 # SQLAlchemy Boolean Search Change Log
 
+## [0.2.1] - 2020-09-29
+-----------------------
+- Updating syntax for pyparsing>3 API changes.
+
 ## [0.2.0] - 2020-09-29
 -----------------------
 - Refactoring package structure for release on pypi
