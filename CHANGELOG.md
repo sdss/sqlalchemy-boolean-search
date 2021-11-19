@@ -1,5 +1,9 @@
 # SQLAlchemy Boolean Search Change Log
 
+## [0.2.2] - 2021-11-19
+-----------------------
+- Pinning versions
+  
 ## [0.2.1] - 2020-09-29
 -----------------------
 - Updating syntax for pyparsing>3 API changes.
